@@ -73,7 +73,7 @@ function getDefaultEventKey(props: UncontrolledTabsProps) {
 
 
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
-  activeEventKey: string | string[] | number | undefined;
+  activeEventKey: string | number | undefined;
   toggle: (eventKey: string | number) => void;
   hideOnly?: boolean;
   pills?: boolean;
