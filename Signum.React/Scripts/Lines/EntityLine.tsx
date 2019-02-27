@@ -15,7 +15,6 @@ export interface EntityLineProps extends EntityBaseProps {
   renderItem?: React.ReactNode;
   showType?: boolean;
   itemHtmlAttributes?: React.HTMLAttributes<HTMLSpanElement | HTMLAnchorElement>;
-  extraButtons?: (el: EntityLine) => React.ReactNode;
 }
 
 export interface EntityLineState extends EntityLineProps {
@@ -94,7 +93,9 @@ export class EntityLine extends EntityBase<EntityLineProps, EntityLineState> {
         this.convert(entity)
           .then(entity => {
             this.focusNext = true;
-            this.setState({ currentItem: { entity: entity, item: item } }); //Optimization
+            this.state.autocomplete!.getItemFromEntity(entity).then(newItem => //newItem could be different to item on create new case
+              this.setState({ currentItem: { entity: entity, item: newItem } }));
+            
             this.setValue(entity);
           }))
       .done();
