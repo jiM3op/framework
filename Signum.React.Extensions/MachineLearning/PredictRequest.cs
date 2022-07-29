@@ -127,7 +127,7 @@ public static class PredictRequestExtensions
 
             columns = pctx.Predictor.MainQuery.Columns.Select(c => new PredictColumnTS
             {
-                token = new QueryTokenTS(c.Token.Token, true),
+                token = c.Token.Token.ToQueryTokenTS(true),
                 usage = c.Usage,
                 value = c.Usage == PredictorColumnUsage.Input ? inputs?.MainQueryValues.GetOrThrow(c) :
                 originalOutputs == null ? predictedOutputs?.MainQueryValues.GetOrThrow(c) :
@@ -147,8 +147,8 @@ public static class PredictRequestExtensions
                 SplitColumns(sq, out var splitKeys, out var values);
 
                 var columnHeaders =
-                    splitKeys.Select(gk => new PredictSubQueryHeaderTS { token = new QueryTokenTS(gk.Token.Token, true), headerType = PredictorHeaderType.Key }).Concat(
-                    values.Select(agg => new PredictSubQueryHeaderTS { token = new QueryTokenTS(agg.Token.Token, true), headerType = agg.Usage == PredictorSubQueryColumnUsage.Input ? PredictorHeaderType.Input : PredictorHeaderType.Output }))
+                    splitKeys.Select(gk => new PredictSubQueryHeaderTS { token = gk.Token.Token.ToQueryTokenTS(true), headerType = PredictorHeaderType.Key }).Concat(
+                    values.Select(agg => new PredictSubQueryHeaderTS { token = agg.Token.Token.ToQueryTokenTS(true), headerType = agg.Usage == PredictorSubQueryColumnUsage.Input ? PredictorHeaderType.Input : PredictorHeaderType.Output }))
                     .ToList();
 
                 return new PredictSubQueryTableTS

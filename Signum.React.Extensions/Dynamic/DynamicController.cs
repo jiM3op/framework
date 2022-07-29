@@ -95,7 +95,7 @@ public class DynamicController : ControllerBase
             StartParameters.IgnoredDatabaseMismatches.EmptyIfNull(),
         }
         .NotNull()
-        .Select(e => new HttpError(e))
+        .Select(e => SignumExceptionFilterAttribute.ToHttpError(e))
         .ToList();
     }
 

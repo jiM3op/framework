@@ -845,6 +845,7 @@ internal sealed class MListDebugging<T>
 
 public static class MListExtensions
 {
+    public static PrimaryKey DummyRowId = new PrimaryKey("dummy");
     public static MList<T> ToMList<T>(this IEnumerable<T> collection)
     {
         return new MList<T>(collection);

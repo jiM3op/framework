@@ -151,9 +151,9 @@ public static class AuthTokenServer
             using (DeflateStream ds = new DeflateStream(ms, CompressionMode.Decompress))
             {
                 var bytes = ds.ReadAllBytes();
-                var authToken = JsonExtensions.FromJsonBytes<AuthToken>(bytes, EntityJsonContext.FullJsonSerializerOptions);
+                var authToken = JsonExtensions.FromJsonBytes<AuthToken>(bytes, FullEntityJsonSerializer.JsonSerializerOptions);
 
-                authToken.Claims = authToken.Claims.SelectDictionary(key => key, obj => obj is JsonElement elem ? OperationController.BaseOperationRequest.ConvertObject(elem, null) : obj);
+                authToken.Claims = authToken.Claims.SelectDictionary(key => key, obj => obj is JsonElement elem ? OperationRequestExtensions.ConvertObject(elem, null) : obj);
 
                 return authToken;
             }
@@ -191,7 +191,7 @@ public static class AuthTokenServer
                 {
                     using (Utf8JsonWriter writer = new Utf8JsonWriter(ds))
                     {
-                        JsonSerializer.Serialize(writer, token, EntityJsonContext.FullJsonSerializerOptions);
+                        JsonSerializer.Serialize(writer, token, FullEntityJsonSerializer.JsonSerializerOptions);
                     }
                 }
 

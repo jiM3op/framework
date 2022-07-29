@@ -4,6 +4,7 @@ using Signum.React.Facades;
 using Signum.Engine.UserQueries;
 using Signum.Engine.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Signum.React.ApiControllers;
 
 namespace Signum.React.UserQueries;
 

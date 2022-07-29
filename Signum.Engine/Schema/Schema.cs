@@ -581,6 +581,7 @@ public class Schema : IImplementationsFinder
     static Schema()
     {
         PropertyRoute.SetFindImplementationsCallback(pr => Schema.Current.FindImplementations(pr));
+        PropertyRoute.SetHasSomeIndexCallback(pr => Schema.Current.HasSomeIndex(pr));
         ModifiableEntity.SetIsRetrievingFunc(() => EntityCache.HasRetriever);
     }
 

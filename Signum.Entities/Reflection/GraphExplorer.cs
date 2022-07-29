@@ -40,7 +40,7 @@ public static class GraphExplorer
             for (int i = 0; i < ((IList)mlist).Count; i++)
             {
                 if (mlist.GetRowId(i) == null)
-                    mlist.SetRowId(i, DummyRowId);
+                    mlist.SetRowId(i, MListExtensions.DummyRowId);
             }
         }
     }
@@ -198,8 +198,6 @@ public static class GraphExplorer
          "darkgoldenrod", "darkolivegreen3", "darkorchid", "darkseagreen",
          "darkturquoise", "darkviolet", "deeppink", "deepskyblue", "forestgreen"
     };
-
-    public static PrimaryKey DummyRowId = new PrimaryKey("dummy");
 
     //https://dreampuf.github.io/GraphvizOnline/
     public static string SuperGraphviz(this DirectedGraph<Modifiable> modifiables)

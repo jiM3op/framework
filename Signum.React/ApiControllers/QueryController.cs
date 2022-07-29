@@ -10,11 +10,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json.Serialization;
 using System.Text.Json;
+using Signum.Entities.Json;
 using Signum.Engine.Json;
 
 namespace Signum.React.ApiControllers;
 
-#pragma warning disable CS8618 // Non-nullable field is uninitialized.
 
 [ValidateModelFilter]
 public class QueryController : ControllerBase
@@ -40,17 +40,17 @@ public class QueryController : ControllerBase
         return Implementations.By(types.Split(',').Select(a => TypeLogic.GetType(a.Trim())).ToArray());
     }
 
-    [HttpGet("api/query/description/{queryName}"), ProfilerActionSplitter("queryName")]
-    public QueryDescriptionTS GetQueryDescription(string queryName)
+    [HttpGet("api/query/description/{queryKey}"), ProfilerActionSplitter("queryKey")]
+    public QueryDescriptionTS GetQueryDescription(string queryKey)
     {
-        var qn = QueryLogic.ToQueryName(queryName);
-        return new QueryDescriptionTS(QueryLogic.Queries.QueryDescription(qn));
+        var qn = QueryLogic.ToQueryName(queryKey);
+        return QueryServer.ToQueryDescriptionTS(QueryLogic.Queries.QueryDescription(qn));
     }
 
-    [HttpGet("api/query/queryEntity/{queryName}"), ProfilerActionSplitter("queryName")]
-    public QueryEntity GetQueryEntity(string queryName)
+    [HttpGet("api/query/queryEntity/{queryKey}"), ProfilerActionSplitter("queryKey")]
+    public QueryEntity GetQueryEntity(string queryKey)
     {
-        var qn = QueryLogic.ToQueryName(queryName);
+        var qn = QueryLogic.ToQueryName(queryKey);
         return QueryLogic.GetQueryEntity(qn);
     }
 
@@ -62,22 +62,10 @@ public class QueryController : ControllerBase
 
         var tokens = request.tokens.Select(tr => QueryUtils.Parse(tr.token, qd, tr.options)).ToList();
 
-        return tokens.Select(qt => new QueryTokenTS(qt, recursive: true)).ToList();
+        return tokens.Select(qt => qt.ToQueryTokenTS(recursive: true)).ToList();
     }
 
-    public class TokenRequest
-    {
-        public string token;
-        public SubTokensOptions options;
 
-        public override string ToString() => $"{token} ({options})";
-    }
-
-    public class ParseTokensRequest
-    {
-        public string queryKey;
-        public List<TokenRequest> tokens;
-    }
 
     [HttpPost("api/query/subTokens")]
     public List<QueryTokenTS> SubTokens([Required, FromBody]SubTokensRequest request)
@@ -90,15 +78,10 @@ public class QueryController : ControllerBase
 
         var tokens = QueryUtils.SubTokens(token, qd, request.options);
 
-        return tokens.Select(qt => new QueryTokenTS(qt, recursive: false)).ToList();
+        return tokens.Select(qt => qt.ToQueryTokenTS(recursive: false)).ToList();
     }
 
-    public class SubTokensRequest
-    {
-        public string queryKey;
-        public string? token;
-        public SubTokensOptions options;
-    }
+
 
     [HttpPost("api/query/executeQuery"), ProfilerActionSplitter]
     public async Task<ResultTable> ExecuteQuery([Required, FromBody]QueryRequestTS request, CancellationToken token)
@@ -126,135 +109,73 @@ public class QueryController : ControllerBase
     }
 }
 
-
-
-public class QueryDescriptionTS
+public static class QueryControllerExtensions
 {
-    public string queryKey;
-    public Dictionary<string, ColumnDescriptionTS> columns;
-
-    public QueryDescriptionTS(QueryDescription queryDescription)
+    public static QueryRequestTS ToQueryRequestTS(this QueryRequest qr)
     {
-        this.queryKey = QueryUtils.GetKey(queryDescription.QueryName);
-        this.columns = queryDescription.Columns.ToDictionary(a => a.Name, a => new ColumnDescriptionTS(a, queryDescription.QueryName));
-
-        foreach (var action in AddExtension.GetInvocationListTyped())
+        return new QueryRequestTS
         {
-            action(this);
-        }
+            queryKey = QueryUtils.GetKey(qr.QueryName),
+            groupResults = qr.GroupResults,
+            columns = qr.Columns.Select(c => new ColumnTS { token = c.Token.FullKey(), displayName = c.DisplayName }).ToList(),
+            filters = qr.Filters.Select(f => FilterTS.FromFilter(f)).ToList(),
+            orders = qr.Orders.Select(o => new OrderTS { orderType = o.OrderType, token = o.Token.FullKey() }).ToList(),
+            pagination = new PaginationTS(qr.Pagination),
+            systemTime = qr.SystemTime == null ? null : new SystemTimeTS(qr.SystemTime),
+        };
     }
 
-    [JsonExtensionData]
-    public Dictionary<string, object> Extension { get; set; } = new Dictionary<string, object>();
-
-    public static Action<QueryDescriptionTS> AddExtension;
-}
-
-public class ColumnDescriptionTS
-{
-    public string name;
-    public TypeReferenceTS type;
-    public string typeColor;
-    public string niceTypeName;
-    public FilterType? filterType;
-    public string? unit;
-    public string? format;
-    public string displayName;
-    public bool isGroupable;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool hasOrderAdapter;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool preferEquals;
-    public string? propertyRoute;
-
-    public ColumnDescriptionTS(ColumnDescription a, object queryName)
+    public static QueryRequest ToQueryRequest(this QueryRequestTS request, JsonSerializerOptions jsonSerializerOptions, string referrerUrl)
     {
-        var token = new ColumnToken(a, queryName);
-
-        this.name = a.Name;
-        this.type = new TypeReferenceTS(a.Type, a.Implementations);
-        this.filterType = QueryUtils.TryGetFilterType(a.Type);
-        this.typeColor = token.TypeColor;
-        this.niceTypeName = token.NiceTypeName;
-        this.isGroupable = token.IsGroupable;
-        this.hasOrderAdapter = QueryUtils.OrderAdapters.Any(a => a(token) != null);
-        this.preferEquals = token.Type == typeof(string) &&
-            token.GetPropertyRoute() is PropertyRoute pr &&
-            typeof(Entity).IsAssignableFrom(pr.RootType) &&
-            Schema.Current.HasSomeIndex(pr);
-        this.unit = UnitAttribute.GetTranslation(a.Unit);
-        this.format = a.Format;
-        this.displayName = a.DisplayName;
-        this.propertyRoute = token.GetPropertyRoute()?.ToString();
+        var qn = QueryLogic.ToQueryName(request.queryKey);
+        var qd = QueryLogic.Queries.QueryDescription(qn);
+        var groupResults = request.groupResults;
+        return new QueryRequest
+        {
+            QueryUrl = referrerUrl,
+            QueryName = qn,
+            GroupResults = groupResults,
+            Filters = request.filters.EmptyIfNull().Select(f => f.ToFilter(qd, canAggregate: groupResults, jsonSerializerOptions)).ToList(),
+            Orders = request.orders.EmptyIfNull().Select(f => f.ToOrder(qd, canAggregate: groupResults)).ToList(),
+            Columns = request.columns.EmptyIfNull().Select(f => f.ToColumn(qd, canAggregate: groupResults)).ToList(),
+            Pagination = request.pagination.ToPagination(),
+            SystemTime = request.systemTime?.ToSystemTime(),
+        };
     }
-}
 
-public class QueryTokenTS
-{
-    public QueryTokenTS() { }
-    public QueryTokenTS(QueryToken qt, bool recursive)
+    public static QueryEntitiesRequest ToQueryEntitiesRequest(this QueryEntitiesRequestTS request, JsonSerializerOptions jsonSerializerOptions)
     {
-        this.toStr = qt.ToString();
-        this.niceName = qt.NiceName();
-        this.key = qt.Key;
-        this.fullKey = qt.FullKey();
-        this.type = new TypeReferenceTS(qt.Type, qt.GetImplementations());
-        this.filterType = QueryUtils.TryGetFilterType(qt.Type);
-        this.format = qt.Format;
-        this.unit = UnitAttribute.GetTranslation(qt.Unit);
-        this.typeColor = qt.TypeColor;
-        this.niceTypeName = qt.NiceTypeName;
-        this.queryTokenType = GetQueryTokenType(qt);
-        this.isGroupable = qt.IsGroupable;
-        this.hasOrderAdapter = QueryUtils.OrderAdapters.Any(a => a(qt) != null);
-
-        this.preferEquals = qt.Type == typeof(string) &&
-            qt.GetPropertyRoute() is PropertyRoute pr &&
-            typeof(Entity).IsAssignableFrom(pr.RootType) &&
-            Schema.Current.HasSomeIndex(pr);
-
-        this.propertyRoute = qt.GetPropertyRoute()?.ToString();
-        if (recursive && qt.Parent != null)
-            this.parent = new QueryTokenTS(qt.Parent, recursive);
+        var qn = QueryLogic.ToQueryName(request.queryKey);
+        var qd = QueryLogic.Queries.QueryDescription(qn);
+        return new QueryEntitiesRequest
+        {
+            QueryName = qn,
+            Count = request.count,
+            Filters = request.filters.EmptyIfNull().Select(f => f.ToFilter(qd, canAggregate: false, jsonSerializerOptions)).ToList(),
+            Orders = request.orders.EmptyIfNull().Select(f => f.ToOrder(qd, canAggregate: false)).ToList(),
+        };
     }
 
-    private static QueryTokenType? GetQueryTokenType(QueryToken qt)
+    public static QueryValueRequest ToQueryValueRequest(this QueryValueRequestTS request, JsonSerializerOptions jsonSerializerOptions)
     {
-        if (qt is AggregateToken)
-            return QueryTokenType.Aggregate;
+        var qn = QueryLogic.ToQueryName(request.querykey);
+        var qd = QueryLogic.Queries.QueryDescription(qn);
 
-        if (qt is CollectionElementToken ce)
-            return QueryTokenType.Element;
+        var value = request.valueToken.HasText() ? QueryUtils.Parse(request.valueToken, qd, SubTokensOptions.CanAggregate | SubTokensOptions.CanElement) : null;
 
-        if (qt is CollectionAnyAllToken caat)
-            return QueryTokenType.AnyOrAll;
-
-        return null;
+        return new QueryValueRequest
+        {
+            QueryName = qn,
+            MultipleValues = request.multipleValues ?? false,
+            Filters = request.filters.EmptyIfNull().Select(f => f.ToFilter(qd, canAggregate: false, jsonSerializerOptions)).ToList(),
+            ValueToken = value,
+            SystemTime = request.systemTime?.ToSystemTime(),
+        };
     }
 
-    public string toStr;
-    public string niceName;
-    public string key;
-    public string fullKey;
-    public string typeColor;
-    public string niceTypeName;
-    public QueryTokenType? queryTokenType;
-    public TypeReferenceTS type;
-    public FilterType? filterType;
-    public string? format;
-    public string? unit;
-    public bool isGroupable;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool hasOrderAdapter;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool preferEquals;
-    public QueryTokenTS? parent;
-    public string? propertyRoute;
+
+
 }
 
-public enum QueryTokenType
-{
-    Aggregate,
-    Element,
-    AnyOrAll,
-}
+
+

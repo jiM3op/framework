@@ -417,6 +417,15 @@ public class PropertyRoute : IEquatable<PropertyRoute>, ISerializable
 
         return FindImplementations(this);
     }
+    public static Func<PropertyRoute, bool> HasSomeIndexFunc = pr => throw new NotImplementedException("SetHasSomeIndexCallback not set");
+
+    public static void SetHasSomeIndexCallback(Func<PropertyRoute, bool> hasSomeIndexFunc)
+    {
+        HasSomeIndexFunc = hasSomeIndexFunc;
+    }
+
+    public bool HasSomeIndex() => HasSomeIndexFunc(this);
+
 
     public static void SetIsAllowedCallback(Func<PropertyRoute, string?> isAllowed)
     {

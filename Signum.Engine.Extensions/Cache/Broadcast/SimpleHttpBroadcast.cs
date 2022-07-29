@@ -66,7 +66,7 @@ public class SimpleHttpBroadcast : IServerBroadcast
             {
                 var fullUrl = url.TrimEnd('/') + "/api/cache/invalidateTable";
 
-                var json = JsonContent.Create(request, options: EntityJsonContext.FullJsonSerializerOptions /*SignumServer.JsonSerializerOptions*/);
+                var json = JsonContent.Create(request, options: FullEntityJsonSerializer.JsonSerializerOptions /*SignumServer.JsonSerializerOptions*/);
 
                 var response = client.PostAsync(fullUrl, json).Result;
 

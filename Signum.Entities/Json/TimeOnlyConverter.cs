@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Signum.Engine.Json;
+namespace Signum.Entities.Json;
 
 //https://github.com/dotnet/runtime/issues/53539
 public class TimeOnlyConverter : JsonConverter<TimeOnly>

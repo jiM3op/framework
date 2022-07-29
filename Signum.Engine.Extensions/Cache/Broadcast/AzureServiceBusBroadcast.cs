@@ -45,7 +45,7 @@ public class AzureServiceBusBroadcast : IServerBroadcast, IAsyncDisposable
             OriginApplicationName = Schema.Current.ApplicationName,
             MethodName = methodName,
             Argument = argument,
-        }, EntityJsonContext.FullJsonSerializerOptions))).Wait();
+        }, FullEntityJsonSerializer.JsonSerializerOptions))).Wait();
     }
 
     public void Start()
@@ -87,7 +87,7 @@ public class AzureServiceBusBroadcast : IServerBroadcast, IAsyncDisposable
     {
         try
         {
-            var message = arg.Message.Body.ToObjectFromJson<AzureInvalidationMessage>(EntityJsonContext.FullJsonSerializerOptions);
+            var message = arg.Message.Body.ToObjectFromJson<AzureInvalidationMessage>(FullEntityJsonSerializer.JsonSerializerOptions);
 
             if (message.CreationDate < StartTime)
                 return;

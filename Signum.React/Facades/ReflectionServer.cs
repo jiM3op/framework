@@ -6,6 +6,7 @@ using Signum.Engine.Maps;
 using Signum.Entities.Reflection;
 using Signum.Utilities.Reflection;
 using Signum.Entities.Basics;
+using Signum.React.ApiControllers;
 
 namespace Signum.React.Facades;
 
@@ -208,7 +209,7 @@ public static class ReflectionServer
                                     IsReadOnly = !IsId(p) && (p.PropertyInfo?.IsReadOnly() ?? false),
                                     Required = !IsId(p) && ((p.Type.IsValueType && !p.Type.IsNullable()) || (validators?.Any(v => !v.DisabledInModelBinder && (!p.Type.IsMList() ? (v is NotNullValidatorAttribute) : (v is CountIsValidatorAttribute c && c.IsGreaterThanZero))) ?? false)),
                                     Unit = UnitAttribute.GetTranslation(p.PropertyInfo?.GetCustomAttribute<UnitAttribute>()?.UnitName),
-                                    Type = new TypeReferenceTS(IsId(p) ? PrimaryKey.Type(type).Nullify() : p.PropertyInfo!.PropertyType, p.Type.IsMList() ? p.Add("Item").TryGetImplementations() : p.TryGetImplementations()),
+                                    Type = ToTypeReferenceTS(IsId(p) ? PrimaryKey.Type(type).Nullify() : p.PropertyInfo!.PropertyType, p.Type.IsMList() ? p.Add("Item").TryGetImplementations() : p.TryGetImplementations()),
                                     IsMultiline = validators?.OfType<StringLengthValidatorAttribute>().FirstOrDefault()?.MultiLine ?? false,
                                     IsVirtualMList = p.IsVirtualMList(),
                                     MaxLength = validators?.OfType<StringLengthValidatorAttribute>().FirstOrDefault()?.Max.DefaultToNull(-1),
@@ -238,6 +239,81 @@ public static class ReflectionServer
                       .ToDictionaryEx("entities");
         
         return result;
+    }
+
+    public static TypeReferenceTS ToTypeReferenceTS(Type type, Implementations? implementations)
+    {
+        var clean = type == typeof(string) ? type : (type.ElementType() ?? type);
+        var tr = new TypeReferenceTS
+        {
+            IsCollection = type != typeof(string) && type != typeof(byte[]) && type.ElementType() != null,
+
+            IsLite = clean.IsLite(),
+            IsNotNullable = clean.IsValueType && !clean.IsNullable(),
+            IsEmbedded = clean.IsEmbeddedEntity(),
+        };
+
+        if (tr.IsEmbedded && !tr.IsCollection)
+            tr.TypeNiceName = type.NiceName();
+
+        if (implementations != null)
+        {
+            try
+            {
+                tr.Name = implementations.Value.Key();
+            }
+            catch (Exception) when (StartParameters.IgnoredCodeErrors != null)
+            {
+                tr.Name = "ERROR";
+            }
+        }
+        else
+        {
+            tr.Name = TypeScriptType(type);
+        }
+
+        return tr; 
+    }
+
+    private static string TypeScriptType(Type type)
+    {
+        type = CleanMList(type);
+
+        type = type.UnNullify().CleanType();
+
+        return BasicType(type) ?? ReflectionServer.GetTypeName(type) ?? "any";
+    }
+
+    private static Type CleanMList(Type type)
+    {
+        if (type.IsMList())
+            type = type.ElementType()!;
+        return type;
+    }
+
+    public static string? BasicType(Type type)
+    {
+        if (type.IsEnum)
+            return null;
+
+        switch (Type.GetTypeCode(type))
+        {
+            case TypeCode.Boolean: return "boolean";
+            case TypeCode.Char: return "string";
+            case TypeCode.SByte:
+            case TypeCode.Byte:
+            case TypeCode.Int16:
+            case TypeCode.UInt16:
+            case TypeCode.Int32:
+            case TypeCode.UInt32:
+            case TypeCode.Int64:
+            case TypeCode.UInt64: return "number";
+            case TypeCode.Single:
+            case TypeCode.Double:
+            case TypeCode.Decimal: return "decimal";
+            case TypeCode.String: return "string";
+        }
+        return null;
     }
 
     public static bool InTypeScript(PropertyRoute pr)
@@ -350,169 +426,3 @@ public static class ReflectionServer
     }
 }
 
-
-public class TypeInfoTS
-{
-    public KindOfType Kind { get; set; }
-    public string FullName { get; set; } = null!;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]public string? NiceName { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? NicePluralName { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Gender { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public EntityKind? EntityKind { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public EntityData? EntityData { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsLowPopulation { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsSystemVersioned { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ToStringFunction { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool QueryDefined { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, MemberInfoTS> Members { get; set; } = null!;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, CustomLiteModelTS>? CustomLiteModels { get; set; } = null!;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool HasConstructorOperation { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, OperationInfoTS>? Operations { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool RequiresEntityPack { get; set; }
-
-    [JsonExtensionData]
-    public Dictionary<string, object> Extension { get; set; } = new Dictionary<string, object>();
-
-
-    public override string ToString() => $"{Kind} {NiceName} {EntityKind} {EntityData}";
-}
-
-public class CustomLiteModelTS
-{
-    public string? ConstructorFunctionString = null!;
-    public bool IsDefault; 
-}
-
-public class MemberInfoTS
-{
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public TypeReferenceTS? Type { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? NiceName { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsReadOnly { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool Required { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Unit { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Format { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsIgnoredEnum { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsVirtualMList { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? MaxLength { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsMultiline { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool PreserveOrder { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool AvoidDuplicates { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public object? Id { get; set; }
-
-    [JsonExtensionData]
-    public Dictionary<string, object> Extension { get; set; } = new Dictionary<string, object>();
-}
-
-public class OperationInfoTS
-{
-    public OperationType OperationType;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]public bool? CanBeNew;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]public bool? CanBeModified;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]public bool? HasCanExecute;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]public bool? HasStates;
-
-    [JsonExtensionData]
-    public Dictionary<string, object> Extension { get; set; } = new Dictionary<string, object>();
-
-    public OperationInfoTS(OperationInfo oper)
-    {
-        this.CanBeNew = oper.CanBeNew;
-        this.CanBeModified = oper.CanBeModified;
-        this.HasCanExecute = oper.HasCanExecute;
-        this.HasStates = oper.HasStates;
-        this.OperationType = oper.OperationType;
-    }
-}
-
-public class TypeReferenceTS
-{
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]public bool IsCollection { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]public bool IsLite { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]public bool IsNotNullable { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]public bool IsEmbedded { get; set; }
-    public string Name { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? TypeNiceName { get; set; }
-
-#pragma warning disable CS8618 // Non-nullable field is uninitialized.
-    public TypeReferenceTS() { }
-#pragma warning restore CS8618 // Non-nullable field is uninitialized.
-    public TypeReferenceTS(Type type, Implementations? implementations)
-    {
-        this.IsCollection = type != typeof(string) && type != typeof(byte[]) && type.ElementType() != null;
-
-        var clean = type == typeof(string) ? type : (type.ElementType() ?? type);
-        this.IsLite = clean.IsLite();
-        this.IsNotNullable = clean.IsValueType && !clean.IsNullable();
-        this.IsEmbedded = clean.IsEmbeddedEntity();
-
-        if (this.IsEmbedded && !this.IsCollection)
-            this.TypeNiceName = type.NiceName();
-        if(implementations != null)
-        {
-            try
-            {
-                this.Name = implementations.Value.Key();
-            }
-            catch (Exception) when (StartParameters.IgnoredCodeErrors != null)
-            {
-                this.Name = "ERROR";
-            }
-        }
-        else
-        {
-            this.Name = TypeScriptType(type);
-        }
-    }
-
-    private static string TypeScriptType(Type type)
-    {
-        type = CleanMList(type);
-
-        type = type.UnNullify().CleanType();
-
-        return BasicType(type) ?? ReflectionServer.GetTypeName(type) ?? "any";
-    }
-
-    private static Type CleanMList(Type type)
-    {
-        if (type.IsMList())
-            type = type.ElementType()!;
-        return type;
-    }
-
-    public static string? BasicType(Type type)
-    {
-        if (type.IsEnum)
-            return null;
-
-        switch (Type.GetTypeCode(type))
-        {
-            case TypeCode.Boolean: return "boolean";
-            case TypeCode.Char: return "string";
-            case TypeCode.SByte:
-            case TypeCode.Byte:
-            case TypeCode.Int16:
-            case TypeCode.UInt16:
-            case TypeCode.Int32:
-            case TypeCode.UInt32:
-            case TypeCode.Int64:
-            case TypeCode.UInt64: return "number";
-            case TypeCode.Single:
-            case TypeCode.Double:
-            case TypeCode.Decimal: return "decimal";
-            case TypeCode.String: return "string";
-        }
-        return null;
-    }
-
-}
-
-public enum KindOfType
-{
-    Entity,
-    Enum,
-    Message,
-    Query,
-    SymbolContainer,
-}

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Signum.React.Extensions.Templating;
 using System.Text.Json;
 using Signum.Engine.Json;
+using Signum.Entities.Json;
 
 namespace Signum.React.Word;
 

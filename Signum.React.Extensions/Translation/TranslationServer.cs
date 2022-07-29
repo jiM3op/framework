@@ -8,6 +8,7 @@ using Signum.Engine.Authorization;
 using Signum.Engine.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Signum.Entities.Json;
 
 namespace Signum.React.Translation;
 

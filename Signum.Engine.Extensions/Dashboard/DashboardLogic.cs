@@ -256,7 +256,7 @@ public static class DashboardLogic
                         {
                             if (rt.Rows.Length == cq.MaxRows)
                                 throw new ApplicationException($"The query for {c.UserAssets.CommaAnd(a => a.KeyLong())} has returned more than {cq.MaxRows} rows: " +
-                                    JsonSerializer.Serialize(QueryRequestTS.FromQueryRequest(c.QueryRequest), EntityJsonContext.FullJsonSerializerOptions));
+                                    JsonSerializer.Serialize(QueryRequestTS.FromQueryRequest(c.QueryRequest), FullEntityJsonSerializer.JsonSerializerOptions));
                             else
                                 rt = new ResultTable(rt.AllColumns(), null, new Pagination.All());
                         }
@@ -271,7 +271,7 @@ public static class DashboardLogic
                             ResultTable = rt,
                         };
 
-                        var bytes =  JsonSerializer.SerializeToUtf8Bytes(json, EntityJsonContext.FullJsonSerializerOptions);
+                        var bytes =  JsonSerializer.SerializeToUtf8Bytes(json, FullEntityJsonSerializer.JsonSerializerOptions);
 
                         var file = new Entities.Files.FilePathEmbedded(CachedQueryFileType.CachedQuery, "CachedQuery.json", bytes).SaveFile();
 

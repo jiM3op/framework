@@ -14,7 +14,7 @@ public static class OmniboxServer
     public static void Start(IApplicationBuilder app, params IOmniboxResultGenerator[] generators)
     {
         SignumControllerFactory.RegisterArea(MethodInfo.GetCurrentMethod());
-        QueryTokenJsonConverter.GetQueryTokenTS = qt => new QueryTokenTS(qt, true);
+        QueryTokenJsonConverter.GetQueryTokenTS = qt => qt.ToQueryTokenTS(true);
         QueryNameJsonConverter.GetQueryKey = qn => QueryUtils.GetKey(qn);
         OmniboxParser.Manager = new ReactOmniboxManager();
 

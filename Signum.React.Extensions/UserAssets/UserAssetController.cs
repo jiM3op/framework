@@ -55,7 +55,7 @@ public class UserAssetController : ControllerBase
 
                 return new FilterNode
                 {
-                    token = new QueryTokenTS(token, true),
+                    token = token.ToQueryTokenTS(true),
                     operation = filter.operation.Value,
                     value = value,
                     pinned = filter.pinned,
@@ -73,7 +73,7 @@ public class UserAssetController : ControllerBase
                 return new FilterNode
                 {
                     groupOperation = group.groupOperation!.Value,
-                    token = token == null ? null : new QueryTokenTS(token, true),
+                    token = token == null ? null : token.ToQueryTokenTS(true),
                     pinned = group.pinned,
                     dashboardBehaviour = group.dashboardBehaviour,
                     filters = ParseFilterInternal(gr, qd, options, indent + 1).ToList()
@@ -119,7 +119,7 @@ public class UserAssetController : ControllerBase
             
             yield return new QueryFilterItem
             {
-                token = new QueryTokenTS(token, true),
+                token = token.ToQueryTokenTS(true),
                 operation = filter.operation,
                 valueString = FilterValueConverter.ToString(val, token.Type),
                 indentation = ident,
@@ -135,7 +135,7 @@ public class UserAssetController : ControllerBase
             {
                 isGroup = true,
                 groupOperation = filter.groupOperation,
-                token = token == null ? null : new QueryTokenTS(token, true),
+                token = token == null ? null : token.ToQueryTokenTS(true),
                 indentation = ident,
                 valueString = filter.value != null ? FilterValueConverter.ToString(filter.value, typeof(string)) : null,
                 pinned = filter.pinned,

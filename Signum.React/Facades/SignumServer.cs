@@ -4,12 +4,15 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Signum.Engine.Basics;
 using Signum.Engine.Json;
 using Signum.Engine.Maps;
 using Signum.Entities.Basics;
 using Signum.Entities.DynamicQuery;
+using Signum.Entities.Json;
 using Signum.Entities.Reflection;
 using Signum.React.ApiControllers;
 using Signum.React.Filters;
@@ -41,7 +44,7 @@ public static class SignumServer
             s.WriteIndented = true;
             s.Converters.Add(WebEntityJsonConverterFactory);
             s.Converters.Add(new LiteJsonConverterFactory());
-            s.Converters.Add(new MListJsonConverterFactory(WebEntityJsonConverterFactory.AssertCanWrite));
+            s.Converters.Add(new WebMListJsonConverterFactory());
             s.Converters.Add(new JsonStringEnumConverter());
             s.Converters.Add(new ResultTableConverter());
             s.Converters.Add(new TimeSpanConverter());
@@ -138,10 +141,156 @@ public static class SignumServer
     }
 }
 
-public class WebEntityJsonConverterFactory : EntityJsonConverterFactory
+public class WebMListJsonConverterFactory : MListJsonConverterFactory
 {
-    public override EntityJsonConverterStrategy Strategy => EntityJsonConverterStrategy.WebAPI;
+    protected override void AssertCanWrite(PropertyRoute pr, ModifiableEntity? mod)
+    {
+        SignumServer.WebEntityJsonConverterFactory.AssertCanWrite(pr, mod);
+    }
+}
 
+public class WebEntityJsonConverterFactory : EntityJsonConverterFactoryBase
+{
+    public Func<PropertyRoute, ModifiableEntity, string?>? CanReadPropertyRoute;
+    public Func<PropertyRoute, ModifiableEntity?, string?>? CanWritePropertyRoute;
+    public Func<PropertyInfo, Exception, string?> GetErrorMessage = (pi, ex) => "Unexpected error";
+
+    public override void AssertCanWrite(PropertyRoute pr, ModifiableEntity? mod)
+    {
+        string? error = CanWritePropertyRoute.GetInvocationListTyped().Select(a => a(pr, mod)).NotNull().FirstOrDefault();
+        if (error != null)
+            throw new UnauthorizedAccessException(error);
+    }
+
+    protected override Type GetType(string typeString)
+    {
+        return TypeLogic.GetType(typeString);
+    }
+
+    protected override string GetCleanName(Type entityType)
+    {
+        return TypeLogic.GetCleanName(entityType);
+    }
+
+    protected override bool HasTicks(Type entityType)
+    {
+        return Schema.Current.Table(entityType).Ticks != null;
+    }
+
+    protected override IDisposable NewEntityCache()
+    {
+        return new EntityCache();
+    }
+
+    protected override bool ContinueOnError(Exception e, ModifiableEntity entity, PropertyInfo pi)
+    {
+        e.LogException();
+        entity.SetTemporalError(pi, GetErrorMessage(pi, e));
+        return true;
+
+    }
+
+    protected override bool CanRead(PropertyRoute route, ModifiableEntity mod)
+    {
+        return CanReadPropertyRoute?.Invoke(route, mod) == null;
+    }
+
+    protected override bool GetAllowDirectMListChanges()
+    {
+        return false;
+    }
+
+    protected override ModifiableEntity GetExistingEntity(ref Utf8JsonReader reader, IModifiableEntity? existingValue, IdentityInfo identityInfo, Type type)
+    {
+        if (identityInfo.Id == null)
+            throw new JsonException($"Missing Id and IsNew for {identityInfo} ({reader.CurrentState})");
+
+        var id = PrimaryKey.Parse(identityInfo.Id, type);
+        if (existingValue != null && existingValue.GetType() == type)
+        {
+            Entity existingEntity = (Entity)existingValue;
+            if (existingEntity.Id == id)
+            {
+                if (identityInfo.Ticks != null)
+                {
+                    if (identityInfo.Modified == true && existingEntity.Ticks != identityInfo.Ticks.Value)
+                        throw new ConcurrencyException(type, id);
+
+                    existingEntity.Ticks = identityInfo.Ticks.Value;
+                }
+
+                return existingEntity;
+            }
+        }
+
+
+        var retrievedEntity = Database.Retrieve(type, id);
+        if (identityInfo.Ticks != null)
+        {
+            if (identityInfo.Modified == true && retrievedEntity.Ticks != identityInfo.Ticks.Value)
+                throw new ConcurrencyException(type, id);
+
+            retrievedEntity.Ticks = identityInfo.Ticks.Value;
+        }
+
+        return retrievedEntity;
+
+    }
+
+    private static bool IsEquals(object? newValue, object? oldValue)
+    {
+        if (newValue is byte[] nba && oldValue is byte[] oba)
+            return MemoryExtensions.SequenceEqual<byte>(nba, oba);
+
+        if (newValue is DateTime ndt && oldValue is DateTime odt)
+            return Math.Abs(ndt.Subtract(odt).TotalMilliseconds) < 10; //Json dates get rounded
+
+        if (newValue is DateTimeOffset ndto && oldValue is DateTimeOffset odto)
+            return Math.Abs(ndto.Subtract(odto).TotalMilliseconds) < 10; //Json dates get rounded
+
+        return object.Equals(newValue, oldValue);
+    }
+
+    protected override void SetProperty(PropertyConverter pc, PropertyRoute pr, ModifiableEntity entity, object? newValue, object? oldValue, bool markedAsModified)
+    {
+        var pi = pc.PropertyValidator!.PropertyInfo;
+        if (pi.CanWrite)
+        {
+            if (!IsEquals(newValue, oldValue))
+            {
+                if (!markedAsModified && pr.Parent!.RootType.IsEntity())
+                {
+                    if (!pi.HasAttribute<IgnoreAttribute>())
+                    {
+                        try
+                        {
+                            //Call attention of developer
+                            throw new InvalidOperationException($"'modified' is not set but '{pi.Name}' is modified");
+                        }
+                        catch (Exception)
+                        {
+                        }
+                    }
+                }
+                else
+                {
+                    AssertCanWrite(pr, entity);
+                    if (newValue == null && pc.IsNotNull())
+                    {
+                        entity.SetTemporalError(pi, ValidationMessage._0IsNotSet.NiceToString(pi.NiceName()));
+                        return;
+                    }
+
+                    pc.SetValue?.Invoke(entity, newValue);
+                }
+            }
+        }
+    }
+
+    protected override void CleanModificationsIsNecessary(ModifiableEntity mod)
+    {
+        return;
+    }
     protected override PropertyRoute GetCurrentPropertyRouteEmbedded(EmbeddedEntity embedded)
     {
         var controller = ((ControllerActionDescriptor)SignumCurrentContextFilter.CurrentContext!.ActionDescriptor);
@@ -170,23 +319,6 @@ public class WebEntityJsonConverterFactory : EntityJsonConverterFactory
             throw new JsonException($"Type '{type.Name}' is not assignable to '{objectType.TypeName()}'");
 
         return type;
-    }
-}
-
-public class EntityPackTS
-{
-    public Entity entity { get; set; }
-    public Dictionary<string, string> canExecute { get; set; }
-
-    [JsonExtensionData]
-    public Dictionary<string, object?> extension { get; set; } = new Dictionary<string, object?>();
-
-    public static Action<EntityPackTS>? AddExtension;
-
-    public EntityPackTS(Entity entity, Dictionary<string, string> canExecute)
-    {
-        this.entity = entity;
-        this.canExecute = canExecute;
     }
 }
 

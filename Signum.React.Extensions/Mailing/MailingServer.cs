@@ -13,6 +13,7 @@ using Signum.Utilities.Reflection;
 using Signum.Engine.Mailing.Pop3;
 using System.Text.Json;
 using Signum.Engine.Json;
+using Signum.Entities.Json;
 
 namespace Signum.React.Mailing;
 

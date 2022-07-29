@@ -198,12 +198,12 @@ public static class PackageLogic
     public static object?[]? GetOperationArgs(this PackageEntity package)
     {
         return package.OperationArguments == null ? null : 
-            (object?[])JsonExtensions.FromJsonBytes<object[]>(package.OperationArguments, EntityJsonContext.FullJsonSerializerOptions);
+            (object?[])JsonExtensions.FromJsonBytes<object[]>(package.OperationArguments, FullEntityJsonSerializer.JsonSerializerOptions);
     }
 
     public static PackageEntity SetOperationArgs(this PackageEntity package, object?[]? args)
     {
-        package.OperationArguments = args == null ? null : JsonExtensions.ToJsonBytes(args, EntityJsonContext.FullJsonSerializerOptions);
+        package.OperationArguments = args == null ? null : JsonExtensions.ToJsonBytes(args, FullEntityJsonSerializer.JsonSerializerOptions);
         return package;
     }
 }

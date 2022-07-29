@@ -1,11 +1,10 @@
-using Signum.Engine.Json;
 using Signum.Entities.DynamicQuery;
 using Signum.Utilities.Reflection;
 using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Signum.Engine.Json;
+namespace Signum.Entities.Json;
 
 public class ResultTableConverter : JsonConverter<ResultTable>
 {
@@ -46,7 +45,7 @@ public class ResultTableConverter : JsonConverter<ResultTable>
             writer.WriteEndObject();
 
             writer.WritePropertyName("pagination");
-            JsonSerializer.Serialize(writer, new PaginationTS(rt.Pagination), typeof(PaginationTS), options);
+            JsonSerializer.Serialize(writer, new PaginationTableTS(rt.Pagination), typeof(PaginationTableTS), options);
 
             writer.WritePropertyName("totalElements");
             if (rt.TotalElements == null)
@@ -99,6 +98,21 @@ public class ResultTableConverter : JsonConverter<ResultTable>
         }
     }
 
+    public class PaginationTableTS
+    {
+        public PaginationMode mode;
+        public int? elementsPerPage;
+        public int? currentPage;
+
+        public PaginationTableTS() { }
+
+        public PaginationTableTS(Pagination pagination)
+        {
+            this.mode = pagination.GetMode();
+            this.elementsPerPage = pagination.GetElementsPerPage();
+            this.currentPage = (pagination as Pagination.Paginate)?.CurrentPage;
+        }
+    }
 
     interface IUniqueValuesPair
     {

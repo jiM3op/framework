@@ -7,6 +7,7 @@ using Signum.Engine.Authorization;
 using Signum.Entities.Chart;
 using System.Text.Json;
 using Signum.Engine.Json;
+using Signum.Entities.Json;
 
 namespace Signum.React.UserAssets;
 
@@ -36,7 +37,7 @@ public static class UserAssetServer
                 var qte = (QueryTokenEmbedded)ctx.Entity;
 
                 writer.WritePropertyName(ctx.LowerCaseName);
-                JsonSerializer.Serialize(writer, qte.TryToken == null ? null : new QueryTokenTS(qte.TryToken, true), ctx.JsonSerializerOptions);
+                JsonSerializer.Serialize(writer, qte.TryToken?.ToQueryTokenTS( true), ctx.JsonSerializerOptions);
             },
             AvoidValidate = true,
             CustomReadJsonProperty = (ref Utf8JsonReader reader, ReadJsonPropertyContext ctx) =>

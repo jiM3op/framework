@@ -21,7 +21,7 @@ public class SignumExceptionFilterAttribute : IAsyncResourceFilter
 
     public static readonly List<Type> AvoidLogException = new() { typeof(OperationCanceledException) };
 
-    public static Func<Exception, HttpError> CustomHttpErrorFactory = ex => new HttpError(ex);
+    public static Func<Exception, HttpError> CustomHttpErrorFactory = ex => ToHttpError(ex);
 
     public static Action<ResourceExecutedContext, ExceptionEntity>? ApplyMixins = null;
 
@@ -131,30 +131,24 @@ public class SignumExceptionFilterAttribute : IAsyncResourceFilter
         return HttpStatusCode.InternalServerError;
     }
 
-
-}
-
-public class HttpError
-{
-    public HttpError(Exception e, bool includeErrorDetails = true)
+    public static HttpError ToHttpError(Exception e, bool includeErrorDetails = true)
     {
-        this.ExceptionMessage = e.Message;
-        this.ExceptionType = e.GetType().FullName!;
-        this.Model = e is ModelRequestedException mre ? mre.Model : null;
+        var result = new HttpError
+        {
+            ExceptionMessage = e.Message,
+            ExceptionType = e.GetType().FullName!,
+            Model = e is ModelRequestedException mre ? mre.Model : null,
+        };
+
         if (includeErrorDetails)
         {
-            this.ExceptionId = e.GetExceptionEntity()?.Id.ToString();
-            this.StackTrace = e.StackTrace;
-            this.InnerException = e.InnerException == null ? null : new HttpError(e.InnerException);
+            result.ExceptionId = e.GetExceptionEntity()?.Id.ToString();
+            result.StackTrace = e.StackTrace;
+            result.InnerException = e.InnerException == null ? null : ToHttpError(e.InnerException);
         }
-    }
 
-    public string ExceptionType { get; set; }
-    public string ExceptionMessage { get; set; }
-    public string? ExceptionId { get; set; }
-    public string? StackTrace { get; set; }
-    public ModelEntity? Model; /*{ get; set; }*/
-    public HttpError? InnerException; /*{ get; set; }*/
+        return result;
+    }
 }
 
 public class SignumInitializeFilterAttribute : IAsyncResourceFilter

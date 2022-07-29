@@ -4,6 +4,7 @@ using Signum.Engine.Dashboard;
 using Signum.Entities.Dashboard;
 using Signum.Engine.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Signum.React.ApiControllers;
 
 namespace Signum.React.Dashboard;
 

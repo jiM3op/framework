@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Signum.Entities.Authorization;
 using System.Text.Json;
 using Signum.Engine.Json;
+using Signum.Entities.Json;
 
 namespace Signum.React.Chart;
 

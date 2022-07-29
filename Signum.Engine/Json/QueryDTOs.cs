@@ -1,10 +1,11 @@
-using Signum.Engine.Basics;
+//using Signum.Engine.Basics;
 using Signum.Entities.DynamicQuery;
 using System.Collections.ObjectModel;
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace Signum.Engine.Json;
+
 #pragma warning disable CS8618 // Non-nullable field is uninitialized.
 public class FilterJsonConverter : JsonConverter<FilterTS>
 {
@@ -19,7 +20,7 @@ public class FilterJsonConverter : JsonConverter<FilterTS>
             JsonSerializer.Serialize(writer, fc, options);
         else if (value is FilterGroupTS fg)
             JsonSerializer.Serialize(writer, fg, options);
-        else 
+        else
             throw new UnexpectedValueException(value);
     }
 
@@ -37,13 +38,13 @@ public class FilterJsonConverter : JsonConverter<FilterTS>
                     operation = oper.GetString()!.ToEnum<FilterOperation>(),
                     value = elem.TryGetProperty("value", out var val) ? val.ToObject<object>(options) : null,
                 };
-            }  
+            }
 
             if (elem.TryGetProperty("groupOperation", out var groupOper))
                 return new FilterGroupTS
                 {
                     groupOperation = groupOper.GetString()!.ToEnum<FilterGroupOperation>(),
-                    token = elem.TryGetProperty("token", out var token)? token.GetString() : null,
+                    token = elem.TryGetProperty("token", out var token) ? token.GetString() : null,
                     filters = elem.GetProperty("filters").EnumerateArray().Select(a => a.ToObject<FilterTS>()!).ToList()
                 };
 
@@ -256,23 +257,7 @@ public class QueryValueRequestTS
     public bool? multipleValues;
     public SystemTimeTS/*?*/ systemTime;
 
-    public QueryValueRequest ToQueryValueRequest(JsonSerializerOptions jsonSerializerOptions)
-    {
-        var qn = QueryLogic.ToQueryName(this.querykey);
-        var qd = QueryLogic.Queries.QueryDescription(qn);
-
-        var value = valueToken.HasText() ? QueryUtils.Parse(valueToken, qd, SubTokensOptions.CanAggregate | SubTokensOptions.CanElement) : null;
-
-        return new QueryValueRequest
-        {
-            QueryName = qn,
-            MultipleValues = multipleValues ?? false,
-            Filters = this.filters.EmptyIfNull().Select(f => f.ToFilter(qd, canAggregate: false, jsonSerializerOptions)).ToList(),
-            ValueToken = value,
-            SystemTime = this.systemTime?.ToSystemTime(),
-        };
-    }
-
+   
     public override string ToString() => querykey;
 }
 
@@ -286,38 +271,7 @@ public class QueryRequestTS
     public PaginationTS pagination;
     public SystemTimeTS? systemTime;
 
-    public static QueryRequestTS FromQueryRequest(QueryRequest qr)
-    {
-        return new QueryRequestTS
-        {
-            queryKey = QueryUtils.GetKey(qr.QueryName),
-            groupResults = qr.GroupResults,
-            columns = qr.Columns.Select(c => new ColumnTS { token = c.Token.FullKey(), displayName = c.DisplayName }).ToList(),
-            filters = qr.Filters.Select(f => FilterTS.FromFilter(f)).ToList(),
-            orders = qr.Orders.Select(o => new OrderTS { orderType = o.OrderType, token = o.Token.FullKey() }).ToList(),
-            pagination = new PaginationTS(qr.Pagination),
-            systemTime = qr.SystemTime == null ? null : new SystemTimeTS(qr.SystemTime),
-        };
-    }
-
-    public QueryRequest ToQueryRequest(JsonSerializerOptions jsonSerializerOptions, string referrerUrl)
-    {
-        var qn = QueryLogic.ToQueryName(this.queryKey);
-        var qd = QueryLogic.Queries.QueryDescription(qn);
-
-        return new QueryRequest
-        {
-            QueryUrl = referrerUrl,
-            QueryName = qn,
-            GroupResults = groupResults,
-            Filters = this.filters.EmptyIfNull().Select(f => f.ToFilter(qd, canAggregate: groupResults, jsonSerializerOptions)).ToList(),
-            Orders = this.orders.EmptyIfNull().Select(f => f.ToOrder(qd, canAggregate: groupResults)).ToList(),
-            Columns = this.columns.EmptyIfNull().Select(f => f.ToColumn(qd, canAggregate: groupResults)).ToList(),
-            Pagination = this.pagination.ToPagination(),
-            SystemTime = this.systemTime?.ToSystemTime(),
-        };
-    }
-
+  
 
     public override string ToString() => queryKey;
 }
@@ -331,18 +285,7 @@ public class QueryEntitiesRequestTS
 
     public override string ToString() => queryKey;
 
-    public QueryEntitiesRequest ToQueryEntitiesRequest(JsonSerializerOptions jsonSerializerOptions)
-    {
-        var qn = QueryLogic.ToQueryName(queryKey);
-        var qd = QueryLogic.Queries.QueryDescription(qn);
-        return new QueryEntitiesRequest
-        {
-            QueryName = qn,
-            Count = count,
-            Filters = filters.EmptyIfNull().Select(f => f.ToFilter(qd, canAggregate: false, jsonSerializerOptions)).ToList(),
-            Orders = orders.EmptyIfNull().Select(f => f.ToOrder(qd, canAggregate: false)).ToList(),
-        };
-    }
+  
 }
 
 public class OrderTS
@@ -357,4 +300,3 @@ public class OrderTS
 
     public override string ToString() => $"{token} {orderType}";
 }
-
